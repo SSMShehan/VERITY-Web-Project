@@ -1,21 +1,18 @@
 import React from "react";
 import { MdDelete } from "react-icons/md";
 import { FaRegEdit } from "react-icons/fa";
-import { useNavigate } from 'react-router-dom';
+import TasksModel from "./TasksModel";
 
 const TasksTable = ({ data }) => {
-  const navigate = useNavigate();
-
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <p className="text-gray-500 mb-4">No Tasks data available</p>
-        <button 
-          onClick={() => navigate('/tasks/model')}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Create New Task
-        </button>
+        <TasksModel>
+          <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+            Create New Task
+          </button>
+        </TasksModel>
       </div>
     );
   }
@@ -24,12 +21,11 @@ const TasksTable = ({ data }) => {
     <div className="w-full overflow-x-auto p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Tasks</h2>
-        <button 
-          onClick={() => navigate('/tasks/model')}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Add New Task
-        </button>
+        <TasksModel>
+          <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+            Add New Task
+          </button>
+        </TasksModel>
       </div>
       <div className="min-w-[900px] bg-gray-100 rounded-xl p-6">
         <table className="w-full">
