@@ -1,6 +1,7 @@
 const { query } = require("../config/prisma");
 const {
   createtaskTableQuery,
+  normalizeTaskProjectIdTypeQuery,
   creatRoleQuery,
   CreatetasksQuery,
   deletetasksQuery,
@@ -9,10 +10,15 @@ const {
   gettasksQuery
 } = require("../config/sqlQuery");
 
+const ensureTasksSchema = async () => {
+  await query(creatRoleQuery);
+  await query(createtaskTableQuery);
+  await query(normalizeTaskProjectIdTypeQuery);
+};
+
 const getAlltasks = async (req, res) => {
   try {
-    await query(creatRoleQuery);
-    await query(createtaskTableQuery);
+    await ensureTasksSchema();
 
     const { rows } = await query(getAlltasksQuery);
     res.json(rows);
@@ -24,6 +30,7 @@ const getAlltasks = async (req, res) => {
 
 const gettasks = async (req, res) => {
   try {
+    await ensureTasksSchema();
     const id = req.params.id;
     const data = await query(gettasksQuery, [id]);
 
@@ -39,6 +46,7 @@ const gettasks = async (req, res) => {
 
 const deletetasks = async (req, res) => {
   try {
+    await ensureTasksSchema();
     const id = req.params.id;
     const data = await query(deletetasksQuery, [id]);
 
@@ -54,11 +62,14 @@ const deletetasks = async (req, res) => {
 
 const Updatetasks = async (req, res) => {
   try {
+    await ensureTasksSchema();
     const id = req.params.id;
     const { project_id, title, description, priority, status, deadline } = req.body;
+    const normalizedProjectId =
+      project_id === undefined || project_id === null ? null : String(project_id).trim();
 
     const result = await query(updatetasksQuery, [
-      project_id,
+      normalizedProjectId,
       title,
       description,
       priority,
@@ -79,14 +90,16 @@ const Updatetasks = async (req, res) => {
 
 const Createtasks = async (req, res) => {
   try {
+    await ensureTasksSchema();
     const { project_id, title, description, priority, status, deadline } = req.body;
+    const normalizedProjectId = String(project_id || "").trim();
 
-    if (!project_id || !title || !description || !deadline) {
+    if (!normalizedProjectId || !title || !description || !deadline) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     const data = await query(CreatetasksQuery, [
-      project_id,
+      normalizedProjectId,
       title,
       description,
       priority || "medium",

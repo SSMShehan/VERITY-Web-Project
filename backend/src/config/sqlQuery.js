@@ -10,7 +10,7 @@ END$$;
 const createtaskTableQuery = `
 CREATE TABLE IF NOT EXISTS tasks_details (
   id SERIAL PRIMARY KEY,
-  project_id INT NOT NULL,
+  project_id TEXT NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT,
   priority VARCHAR(20) DEFAULT 'medium',
@@ -19,6 +19,22 @@ CREATE TABLE IF NOT EXISTS tasks_details (
   created_by INT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+`;
+
+const normalizeTaskProjectIdTypeQuery = `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'tasks_details'
+      AND column_name = 'project_id'
+      AND data_type <> 'text'
+  ) THEN
+    ALTER TABLE tasks_details
+    ALTER COLUMN project_id TYPE TEXT USING project_id::TEXT;
+  END IF;
+END$$;
 `;
 
 const getAlltasksQuery = `
@@ -64,6 +80,7 @@ RETURNING *;
 module.exports = {
   creatRoleQuery,
   createtaskTableQuery,
+  normalizeTaskProjectIdTypeQuery,
   getAlltasksQuery,
   CreatetasksQuery,
   gettasksQuery,

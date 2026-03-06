@@ -1,11 +1,13 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import LandingPage from './pages/LandingPage';
-import DashboardPlaceholder from './pages/DashboardPlaceholder';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import TasksTable from './components/tasks/TasksTable';
 import TasksModel from './components/tasks/TasksModel';
+import TaskCatalog from './components/tasks/TaskCatalog';
+import TasksDashboard from './components/tasks/TasksDashboard';
+
 
 export const backendUrl = 'http://localhost:5000/api/tasks';
 
@@ -43,8 +45,11 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<DashboardPlaceholder />} />
+          <Route path="/dashboard" element={<TasksDashboard />} />
           <Route path="/tasks" element={<TasksTable data={data} />} />
+          <Route path="/TaskCatalog" element={<TaskCatalog />} />
+          <Route path="/TaskCatalog/:courseId" element={<TaskCatalog />} />
+          <Route path="/tasksdashbord" element={<TasksDashboard />} />
           <Route
             path="/tasks/model"
             element={

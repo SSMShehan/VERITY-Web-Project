@@ -21,9 +21,12 @@ const fields = [
   { label: "Deadline", name: "deadline", type: "date" },
 ];
 
-const TasksModel = ({ children, type = "add", data = null }) => {
+const TasksModel = ({ children, type = "add", data = null, initialData = null }) => {
+  const getInitialInfo = () =>
+    type === "add" ? { ...emptyTask, ...(initialData || {}) } : { ...emptyTask, ...data };
+
   const [open, setOpen] = useState(false);
-  const [info, setInfo] = useState(type === "add" ? emptyTask : { ...emptyTask, ...data });
+  const [info, setInfo] = useState(getInitialInfo);
 
   const handleChanges = (e) => {
     setInfo((prev) => ({
@@ -75,7 +78,7 @@ const TasksModel = ({ children, type = "add", data = null }) => {
   });
 
   const handleFormSubmission = () => {
-    const required = ["project_id", "title", "description", "priority", "status", "deadline"];
+    const required = ["project_id", "title", "description"];
 
     for (const field of required) {
       if (!String(info[field] || "").trim()) {
@@ -84,16 +87,30 @@ const TasksModel = ({ children, type = "add", data = null }) => {
       }
     }
 
+    const normalizedInfo = {
+      ...info,
+      priority: String(info.priority || "medium").trim(),
+      status: String(info.status || "in-progress").trim(),
+      deadline: String(info.deadline || new Date().toISOString().slice(0, 10)).trim(),
+    };
+
     if (type === "add") {
-      addMutation.mutate(info);
+      addMutation.mutate(normalizedInfo);
     } else {
-      updateMutation.mutate(info);
+      updateMutation.mutate(normalizedInfo);
     }
+  };
+
+  const openModal = () => {
+    setInfo(getInitialInfo());
+    setOpen(true);
   };
 
   return (
     <div className="inline-block">
-      <div onClick={() => setOpen(true)}>{children || <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Open Task Form</button>}</div>
+      <div onClick={openModal}>
+        {children || <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Open Task Form</button>}
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
