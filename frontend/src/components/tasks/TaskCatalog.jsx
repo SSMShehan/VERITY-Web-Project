@@ -1,7 +1,7 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { FiAlertCircle, FiArrowLeft, FiBookOpen, FiClock, FiFilter, FiSearch, FiUploadCloud, FiUser } from "react-icons/fi";
+import { FiArrowLeft, FiBookOpen, FiClock, FiFilter, FiSearch, FiUser } from "react-icons/fi";
 import { backendUrl } from "../../App";
 import TasksModel from "./TasksModel";
 import { queryClient } from "./queryClient";
@@ -112,8 +112,6 @@ const TaskCatalog = ({ embedded = false }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
   const [selectedLevel, setSelectedLevel] = useState("all");
-  const taskFileInputRef = useRef(null);
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [uploadedByTask, setUploadedByTask] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("course_task_uploads") || "{}");
@@ -215,13 +213,30 @@ const TaskCatalog = ({ embedded = false }) => {
     return progressMap;
   }, [enrichedCourses, tasksData]);
 
-  const activeTask = useMemo(() => {
-    if (selectedCourseTasks.length === 0) return null;
-    return selectedCourseTasks.find((task) => task.id === selectedTaskId) || selectedCourseTasks[0];
-  }, [selectedCourseTasks, selectedTaskId]);
+  const openAssignments = useMemo(
+    () =>
+      selectedCourseTasks.filter((task) => {
+        const isCompleted = String(task.status || "").trim().toLowerCase() === "completed";
+        return !uploadedByTask[task.id] && !isCompleted;
+      }),
+    [selectedCourseTasks, uploadedByTask]
+  );
 
-  const completeTaskMutation = useMutation({
-    mutationFn: async (task) => {
+  const submittedAssignments = useMemo(
+    () =>
+      selectedCourseTasks.filter((task) => {
+        const isCompleted = String(task.status || "").trim().toLowerCase() === "completed";
+        return Boolean(uploadedByTask[task.id]) || isCompleted;
+      }),
+    [selectedCourseTasks, uploadedByTask]
+  );
+
+  const submitAssignmentMutation = useMutation({
+    mutationFn: async ({ task, submission }) => {
+      if (String(task.status || "").trim().toLowerCase() === "completed") {
+        return task;
+      }
+
       const res = await fetch(`${backendUrl}/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -236,10 +251,20 @@ const TaskCatalog = ({ embedded = false }) => {
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result?.error || "Failed to complete task");
-      return result;
+      if (!res.ok) throw new Error(result?.error || "Failed to submit assignment");
+      return { ...result, submission };
     },
-    onSuccess: () => {
+    onSuccess: (_, { task, submission }) => {
+      const updated = {
+        ...uploadedByTask,
+        [task.id]: {
+          ...submission,
+          uploadedAt: new Date().toISOString(),
+        },
+      };
+
+      setUploadedByTask(updated);
+      localStorage.setItem("course_task_uploads", JSON.stringify(updated));
       queryClient.invalidateQueries({ queryKey: ["tasks_details"] });
     },
     onError: (error) => {
@@ -269,18 +294,81 @@ const TaskCatalog = ({ embedded = false }) => {
     setSelectedLevel("all");
   };
 
-  const handleUploadTaskWork = (taskId, file) => {
-    if (!file) return;
-    const updated = {
-      ...uploadedByTask,
-      [taskId]: {
-        fileName: file.name,
-        uploadedAt: new Date().toISOString(),
-      },
-    };
-    setUploadedByTask(updated);
-    localStorage.setItem("course_task_uploads", JSON.stringify(updated));
+  const buildSubmissionMeta = (file) => ({
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type || "Unknown type",
+    lastModified: file.lastModified || Date.now(),
+  });
+
+  const formatFileSize = (size = 0) => {
+    if (!size) return "Unknown size";
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
+    return `${Math.round(size / 104857.6) / 10} MB`;
   };
+
+  const formatLongDate = (value) =>
+    new Date(value).toLocaleString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+  const handleSelectAndSubmitTaskFile = (task, file) => {
+    if (!file) return;
+    const submission = buildSubmissionMeta(file);
+    submitAssignmentMutation.mutate({
+      task,
+      submission,
+    });
+  };
+
+  const renderAssignmentRows = (tasks, section) =>
+    tasks.map((task) => {
+      const submission = uploadedByTask[task.id];
+      const isSubmitted = Boolean(submission) || String(task.status || "").trim().toLowerCase() === "completed";
+
+      return (
+        <tr key={task.id} className="border-t border-slate-200 text-sm text-slate-700">
+          <td className="px-3 py-3 text-slate-500">{selectedCourse?.courseCode}</td>
+          <td className="px-3 py-3 font-semibold text-[#1f5f9a]">{task.title}</td>
+          <td className="px-3 py-3">
+            <div className="space-y-1 text-xs">
+              <p>
+                Due: {task.deadline ? formatLongDate(task.deadline) : "No deadline"}
+              </p>
+              <p className={isSubmitted ? "text-[#1f5f9a]" : "text-slate-500"}>
+                {isSubmitted ? "Download submissions" : "Not submitted"}
+              </p>
+            </div>
+          </td>
+          <td className="px-3 py-3">
+            <div className="space-y-1 text-xs">
+              <p>Due: {task.deadline ? formatLongDate(task.deadline) : "No feedback deadline"}</p>
+              <p className="text-slate-500">
+                {submission ? new Date(submission.uploadedAt).toLocaleTimeString() : "@ 00:40"}
+              </p>
+            </div>
+          </td>
+          <td className="px-3 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer rounded-sm bg-lime-500 px-5 py-2 text-xs font-bold text-slate-900 shadow-sm hover:bg-lime-400">
+                {section === "open" ? "Submit" : "Re-Submit"}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => handleSelectAndSubmitTaskFile(task, event.target.files?.[0] || null)}
+                />
+              </label>
+            </div>
+          </td>
+        </tr>
+      );
+    });
 
   return (
     <div
@@ -455,127 +543,65 @@ const TaskCatalog = ({ embedded = false }) => {
                   )}
 
                   {!isTasksLoading && !isTasksError && selectedCourseTasks.length > 0 && (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                      <table className="min-w-full text-left text-sm">
-                        <thead className="bg-slate-100 text-slate-600">
-                          <tr>
-                            <th className="px-3 py-2">ID</th>
-                            <th className="px-3 py-2">Title</th>
-                            <th className="px-3 py-2">Description</th>
-                            <th className="px-3 py-2">Priority</th>
-                            <th className="px-3 py-2">Status</th>
-                            <th className="px-3 py-2">Deadline</th>
-                            <th className="px-3 py-2">Submission</th>
-                            <th className="px-3 py-2">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedCourseTasks.map((task) => (
-                            <tr
-                              key={task.id}
-                              onClick={() => setSelectedTaskId(task.id)}
-                              className={`cursor-pointer border-t border-slate-100 text-slate-700 ${
-                                activeTask?.id === task.id ? "bg-blue-50/60" : ""
-                              }`}
-                            >
-                              <td className="px-3 py-2">{task.id}</td>
-                              <td className="px-3 py-2">{task.title}</td>
-                              <td className="max-w-[260px] px-3 py-2">
-                                <p className="truncate" title={task.description || ""}>
-                                  {task.description || "-"}
-                                </p>
-                              </td>
-                              <td className="px-3 py-2">{task.priority}</td>
-                              <td className="px-3 py-2">{task.status}</td>
-                              <td className="px-3 py-2">
-                                {task.deadline ? new Date(task.deadline).toLocaleDateString() : "-"}
-                              </td>
-                              <td className="px-3 py-2">
-                                {uploadedByTask[task.id] ? (
-                                  <div className="text-xs">
-                                    <p className="font-semibold text-slate-700">{uploadedByTask[task.id].fileName}</p>
-                                    <p className="text-slate-500">
-                                      {new Date(uploadedByTask[task.id].uploadedAt).toLocaleString()}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400">Not uploaded</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => completeTaskMutation.mutate(task)}
-                                    disabled={task.status === "completed" || completeTaskMutation.isPending}
-                                    className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${
-                                      task.status === "completed"
-                                        ? "cursor-not-allowed bg-emerald-100 text-emerald-700"
-                                        : "bg-emerald-600 text-white hover:bg-emerald-700"
-                                    }`}
-                                  >
-                                    {task.status === "completed" ? "Completed" : "Complete"}
-                                  </button>
+                    <div className="space-y-8">
+                      <section>
+                        <h4 className="mb-3 text-3xl font-bold tracking-tight text-slate-700">Open Assignments</h4>
+                        <div className="overflow-x-auto border border-slate-200 bg-white">
+                          <table className="min-w-full text-left text-sm">
+                            <thead className="bg-white text-[#1f5f9a]">
+                              <tr className="border-b border-slate-200">
+                                <th className="px-3 py-2 font-semibold">Module</th>
+                                <th className="px-3 py-2 font-semibold">Assignment</th>
+                                <th className="px-3 py-2 font-semibold">Submissions</th>
+                                <th className="px-3 py-2 font-semibold">Feedback</th>
+                                <th className="px-3 py-2 font-semibold">State</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {openAssignments.length > 0 ? (
+                                renderAssignmentRows(openAssignments, "open")
+                              ) : (
+                                <tr className="border-t border-slate-200 text-sm text-slate-500">
+                                  <td colSpan="5" className="px-3 py-4">
+                                    No open assignments.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
 
-                                  <label className="cursor-pointer rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                                    Upload Work
-                                    <input
-                                      type="file"
-                                      className="hidden"
-                                      onChange={(event) =>
-                                        handleUploadTaskWork(task.id, event.target.files?.[0] || null)
-                                      }
-                                    />
-                                  </label>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <section>
+                        <h4 className="mb-3 text-3xl font-bold tracking-tight text-slate-700">Submitted Assignments</h4>
+                        <div className="overflow-x-auto border border-slate-200 bg-white">
+                          <table className="min-w-full text-left text-sm">
+                            <thead className="bg-white text-[#1f5f9a]">
+                              <tr className="border-b border-slate-200">
+                                <th className="px-3 py-2 font-semibold">Module</th>
+                                <th className="px-3 py-2 font-semibold">Assignment</th>
+                                <th className="px-3 py-2 font-semibold">Submissions</th>
+                                <th className="px-3 py-2 font-semibold">Feedback</th>
+                                <th className="px-3 py-2 font-semibold">State</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {submittedAssignments.length > 0 ? (
+                                renderAssignmentRows(submittedAssignments, "submitted")
+                              ) : (
+                                <tr className="border-t border-slate-200 text-sm text-slate-500">
+                                  <td colSpan="5" className="px-3 py-4">
+                                    No submitted assignments yet.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
                     </div>
                   )}
 
-                  {!isTasksLoading && !isTasksError && activeTask && (
-                    <div className="mt-5 rounded-xl border border-slate-300 bg-white p-4">
-                      <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h5 className="text-base font-bold text-slate-800">Import Visual Update</h5>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-500"
-                          >
-                            <FiAlertCircle /> Report Issue
-                          </button>
-                        </div>
-                        <div
-                          className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 text-center"
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            handleUploadTaskWork(activeTask.id, event.dataTransfer.files?.[0] || null);
-                          }}
-                        >
-                          <FiUploadCloud className="mx-auto mb-2 text-4xl text-slate-400" />
-                          <p className="mb-3 text-sm text-slate-500">Drag & drop task result image or file</p>
-                          <button
-                            type="button"
-                            onClick={() => taskFileInputRef.current?.click()}
-                            className="rounded-md border border-emerald-500 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-600"
-                          >
-                            Import From Device
-                          </button>
-                          <input
-                            ref={taskFileInputRef}
-                            type="file"
-                            className="hidden"
-                            onChange={(event) => handleUploadTaskWork(activeTask.id, event.target.files?.[0] || null)}
-                          />
-                          <p className="mt-3 text-xs text-slate-400">Maximum recommended file size: 5 MB</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </section>
             ) : (
