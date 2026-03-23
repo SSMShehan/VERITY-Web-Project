@@ -1,11 +1,16 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
+Sachini-code
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js"
+
     "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+ main
   },
   "keywords": [],
   "author": "",
@@ -14,11 +19,15 @@
   "dependencies": {
     "@prisma/client": "^5.21.1",
     "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.18.0",
+    "nodemailer": "^8.0.3",
+    "nodemon": "^3.1.14",
+    "pg": "^8.19.0",
     "prisma": "^5.21.1"
-  }
+  },
+  "description": ""
 }
