@@ -6,8 +6,9 @@ import {
   FiClock,
   FiGrid,
   FiList,
-  FiSearch,
+  FiMenu,
   FiSettings,
+  FiX,
   FiUser,
 } from "react-icons/fi";
 import { RiFolder3Line } from "react-icons/ri";
@@ -35,6 +36,8 @@ const StatCard = ({ title, value, note, icon, cardClass }) => (
 
 const TasksDashboard = ({ data = [] }) => {
   const [activeView, setActiveView] = useState("catalog");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const stats = useMemo(() => {
     const totalTasks = data.length;
@@ -59,15 +62,48 @@ const TasksDashboard = ({ data = [] }) => {
   return (
     <div className="min-h-screen bg-[linear-gradient(135deg,#eef3ff_0%,#eaf4ff_45%,#f7f9ff_100%)] [font-family:'Sora',sans-serif] text-slate-900">
       <div className="relative flex min-h-screen">
-        <aside className="hidden w-72 border-r border-white/70 bg-white/75 p-6 backdrop-blur-xl lg:flex lg:flex-col">
-          <div className="mb-8 flex items-center gap-3">
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close sidebar overlay"
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-30 bg-slate-900/35 lg:hidden"
+          />
+        )}
+
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-white/70 bg-white/90 p-6 backdrop-blur-xl transition-all duration-200 lg:static lg:z-auto lg:translate-x-0 lg:bg-white/75 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } ${sidebarCollapsed ? "w-24" : "w-72"}`}
+        >
+          <div className={`mb-8 flex items-center ${sidebarCollapsed ? "justify-between gap-2" : "gap-3"}`}>
             <div className="rounded-xl bg-blue-600 p-2 text-white">
               <FiGrid />
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Verity</p>
-              <p className="text-3xl font-extrabold leading-tight tracking-tight">Task Hub</p>
-            </div>
+            {!sidebarCollapsed && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Verity</p>
+                <p className="text-3xl font-extrabold leading-tight tracking-tight">Task Hub</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              className="ml-auto hidden rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 lg:inline-flex"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <FiMenu /> : <FiX />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden ${
+                sidebarCollapsed ? "ml-0" : "ml-auto"
+              }`}
+              aria-label="Close sidebar"
+            >
+              <FiX />
+            </button>
           </div>
 
           <nav className="space-y-2 text-sm font-medium">
@@ -83,32 +119,39 @@ const TasksDashboard = ({ data = [] }) => {
                   onClick={() => {
                     if (item.key === "catalog") setActiveView("catalog");
                     if (item.key === "tasks") setActiveView("tasks");
+                    setSidebarOpen(false);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 transition ${
-                    active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
-                  }`}
+                  className={`flex w-full items-center rounded-xl px-4 py-2.5 transition ${
+                    sidebarCollapsed ? "justify-center" : "gap-3"
+                  } ${active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`
+                  }
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
-                  <Icon />
-                  {item.label}
+                  <Icon className="shrink-0" />
+                  {!sidebarCollapsed && item.label}
                 </button>
               );
             })}
           </nav>
-
-          <div className="mt-auto rounded-2xl bg-slate-900 p-4 text-white">
-            <p className="text-xs uppercase tracking-[0.14em] text-blue-200">Quick Actions</p>
-            <p className="mt-2 text-sm text-slate-200">Create and assign tasks from one place.</p>
-            <TasksModel>
-              <button className="mt-4 w-full rounded-xl bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-400">
-                New Task
-              </button>
-            </TasksModel>
-          </div>
         </aside>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <header className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/70 bg-white/75 p-4 shadow-sm backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+          <header
+            className={`flex flex-col gap-4 rounded-2xl border border-white/70 bg-white/75 p-4 shadow-sm backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between ${
+              isCatalogView ? "mb-3" : "mb-6"
+            }`}
+          >
             <div>
+              <div className="mb-3 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
+                  aria-label="Open sidebar"
+                >
+                  <FiMenu />
+                </button>
+              </div>
               <h1 className="text-2xl font-extrabold tracking-tight">
                 {isCatalogView ? "Course Catalog Dashboard" : "Tasks Main Dashboard"}
               </h1>
@@ -119,14 +162,6 @@ const TasksDashboard = ({ data = [] }) => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <FiSearch className="text-slate-400" />
-                <input
-                  type="text"
-                  placeholder={isCatalogView ? "Search courses..." : "Search tasks..."}
-                  className="w-40 bg-transparent text-sm outline-none sm:w-52"
-                />
-              </label>
               <button className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-100">
                 <FiBell />
               </button>

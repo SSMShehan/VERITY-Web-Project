@@ -21,12 +21,32 @@ const fields = [
   { label: "Deadline", name: "deadline", type: "date" },
 ];
 
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read PDF file"));
+    reader.readAsDataURL(file);
+  });
+
+const parseErrorResponse = async (res, fallbackMessage) => {
+  const text = await res.text();
+
+  try {
+    const data = JSON.parse(text);
+    return data?.error || data?.message || fallbackMessage;
+  } catch {
+    return text || fallbackMessage;
+  }
+};
+
 const TasksModel = ({ children, type = "add", data = null, initialData = null }) => {
   const getInitialInfo = () =>
     type === "add" ? { ...emptyTask, ...(initialData || {}) } : { ...emptyTask, ...data };
 
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState(getInitialInfo);
+  const [selectedPdf, setSelectedPdf] = useState(null);
 
   const handleChanges = (e) => {
     setInfo((prev) => ({
@@ -43,8 +63,15 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
         body: JSON.stringify(payload),
       });
 
+      if (!res.ok) {
+        const message = await parseErrorResponse(res, "Failed to create task");
+        if (res.status === 413 || /request entity too large/i.test(message)) {
+          throw new Error("Upload is larger than the backend limit. Restart the backend server so the new 50 MB limit is applied.");
+        }
+        throw new Error(message);
+      }
+
       const result = await res.json();
-      if (!res.ok) throw new Error(result?.error || "Failed to create task");
       return result;
     },
     onSuccess: () => {
@@ -64,8 +91,15 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
         body: JSON.stringify(payload),
       });
 
+      if (!res.ok) {
+        const message = await parseErrorResponse(res, "Failed to update task");
+        if (res.status === 413 || /request entity too large/i.test(message)) {
+          throw new Error("Upload is larger than the backend limit. Restart the backend server so the new 50 MB limit is applied.");
+        }
+        throw new Error(message);
+      }
+
       const result = await res.json();
-      if (!res.ok) throw new Error(result?.error || "Failed to update task");
       return result;
     },
     onSuccess: () => {
@@ -77,7 +111,25 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
     },
   });
 
-  const handleFormSubmission = () => {
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) {
+      setSelectedPdf(null);
+      return;
+    }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      alert("Please select a PDF file.");
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedPdf(file);
+  };
+
+  const handleFormSubmission = async () => {
     const required = ["project_id", "title", "description"];
 
     for (const field of required) {
@@ -94,15 +146,30 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
       deadline: String(info.deadline || new Date().toISOString().slice(0, 10)).trim(),
     };
 
+    let payload = normalizedInfo;
+
+    if (selectedPdf) {
+      const dataUrl = await readFileAsDataUrl(selectedPdf);
+      payload = {
+        ...normalizedInfo,
+        pdf: {
+          fileName: selectedPdf.name,
+          mimeType: selectedPdf.type || "application/pdf",
+          content: dataUrl,
+        },
+      };
+    }
+
     if (type === "add") {
-      addMutation.mutate(normalizedInfo);
+      addMutation.mutate(payload);
     } else {
-      updateMutation.mutate(normalizedInfo);
+      updateMutation.mutate(payload);
     }
   };
 
   const openModal = () => {
     setInfo(getInitialInfo());
+    setSelectedPdf(null);
     setOpen(true);
   };
 
@@ -136,6 +203,20 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
                   />
                 </div>
               ))}
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">PDF</label>
+                <label className="flex w-full cursor-pointer items-center justify-between rounded-xl bg-gray-100 px-4 py-3 shadow-inner outline-none">
+                  <span className="truncate text-sm text-gray-600">
+                    {selectedPdf ? selectedPdf.name : "Choose a PDF file"}
+                  </span>
+                  <span className="rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white">Browse</span>
+                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleFileChange} />
+                </label>
+                <p className="mt-1 text-xs text-gray-500">
+                  {selectedPdf ? `${Math.round(selectedPdf.size / 102.4) / 10} KB selected` : "PDF only"}
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-4 mt-8">

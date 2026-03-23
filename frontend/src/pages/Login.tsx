@@ -3,6 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, BookOpenText } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+const getRedirectPath = (role?: string) => {
+    const normalizedRole = String(role || '').toUpperCase();
+    return normalizedRole === 'LECTURER' ? '/dashboard' : '/TaskCatalog';
+};
+
 const Login = () => {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ email: '', password: '' });
@@ -33,7 +38,7 @@ const Login = () => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data));
 
-            navigate('/dashboard');
+            navigate(getRedirectPath(data.role));
         } catch (err: any) {
             setError(err.message);
         } finally {

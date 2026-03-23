@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS tasks_details (
   priority VARCHAR(20) DEFAULT 'medium',
   status VARCHAR(20) DEFAULT 'todo',
   deadline TIMESTAMP,
+  pdf_name TEXT,
+  pdf_path TEXT,
+  pdf_mime_type TEXT,
   created_by INT,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -37,6 +40,13 @@ BEGIN
 END$$;
 `;
 
+const ensureTaskPdfColumnsQuery = `
+ALTER TABLE tasks_details
+ADD COLUMN IF NOT EXISTS pdf_name TEXT,
+ADD COLUMN IF NOT EXISTS pdf_path TEXT,
+ADD COLUMN IF NOT EXISTS pdf_mime_type TEXT;
+`;
+
 const getAlltasksQuery = `
 SELECT * FROM tasks_details;
 `;
@@ -48,9 +58,12 @@ INSERT INTO tasks_details (
   description,
   priority,
   status,
-  deadline
+  deadline,
+  pdf_name,
+  pdf_path,
+  pdf_mime_type
 )
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 `;
 
@@ -62,6 +75,7 @@ WHERE id = $1;
 const deletetasksQuery = `
 DELETE FROM tasks_details
 WHERE id = $1;
+RETURNING *;
 `;
 
 const updatetasksQuery = `
@@ -72,8 +86,11 @@ SET
   description = COALESCE($3, description),
   priority = COALESCE($4, priority),
   status = COALESCE($5, status),
-  deadline = COALESCE($6, deadline)
-WHERE id = $7
+  deadline = COALESCE($6, deadline),
+  pdf_name = COALESCE($7, pdf_name),
+  pdf_path = COALESCE($8, pdf_path),
+  pdf_mime_type = COALESCE($9, pdf_mime_type)
+WHERE id = $10
 RETURNING *;
 `;
 
@@ -81,6 +98,7 @@ module.exports = {
   creatRoleQuery,
   createtaskTableQuery,
   normalizeTaskProjectIdTypeQuery,
+  ensureTaskPdfColumnsQuery,
   getAlltasksQuery,
   CreatetasksQuery,
   gettasksQuery,

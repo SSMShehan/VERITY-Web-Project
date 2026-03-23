@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { FiArrowLeft, FiBookOpen, FiClock, FiFilter, FiSearch, FiUser } from "react-icons/fi";
+import { FiArrowLeft, FiBookOpen, FiClock, FiEdit2, FiFilter, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { backendUrl } from "../../App";
 import TasksModel from "./TasksModel";
 import { queryClient } from "./queryClient";
@@ -112,7 +112,8 @@ const TaskCatalog = ({ embedded = false }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
   const [selectedLevel, setSelectedLevel] = useState("all");
-  const [uploadedByTask, setUploadedByTask] = useState(() => {
+  const [assignmentView, setAssignmentView] = useState("open");
+  const [uploadedByTask] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("course_task_uploads") || "{}");
     } catch {
@@ -231,40 +232,29 @@ const TaskCatalog = ({ embedded = false }) => {
     [selectedCourseTasks, uploadedByTask]
   );
 
-  const submitAssignmentMutation = useMutation({
-    mutationFn: async ({ task, submission }) => {
-      if (String(task.status || "").trim().toLowerCase() === "completed") {
-        return task;
-      }
-
-      const res = await fetch(`${backendUrl}/${task.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_id: task.project_id,
-          title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: "completed",
-          deadline: task.deadline,
-        }),
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId) => {
+      const res = await fetch(`${backendUrl}/${taskId}`, {
+        method: "DELETE",
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result?.error || "Failed to submit assignment");
-      return { ...result, submission };
+      if (!res.ok) throw new Error(result?.error || "Failed to delete task");
+      return result;
     },
-    onSuccess: (_, { task, submission }) => {
-      const updated = {
-        ...uploadedByTask,
-        [task.id]: {
-          ...submission,
-          uploadedAt: new Date().toISOString(),
-        },
-      };
+    onSuccess: (_, taskId) => {
+      queryClient.setQueryData(["tasks_details"], (current = []) =>
+        current.filter((task) => String(task.id) !== String(taskId))
+      );
 
-      setUploadedByTask(updated);
-      localStorage.setItem("course_task_uploads", JSON.stringify(updated));
+      try {
+        const storedUploads = JSON.parse(localStorage.getItem("course_task_uploads") || "{}");
+        delete storedUploads[taskId];
+        localStorage.setItem("course_task_uploads", JSON.stringify(storedUploads));
+      } catch {
+        // Ignore malformed local storage and continue refreshing server state.
+      }
+
       queryClient.invalidateQueries({ queryKey: ["tasks_details"] });
     },
     onError: (error) => {
@@ -275,6 +265,7 @@ const TaskCatalog = ({ embedded = false }) => {
   const handleOpenCourse = (course) => {
     if (embedded) {
       setEmbeddedCourseId(course.id);
+      setAssignmentView("open");
       return;
     }
     navigate(`/TaskCatalog/${course.id}`);
@@ -283,6 +274,7 @@ const TaskCatalog = ({ embedded = false }) => {
   const handleBack = () => {
     if (embedded) {
       setEmbeddedCourseId(null);
+      setAssignmentView("open");
       return;
     }
     navigate("/TaskCatalog");
@@ -293,13 +285,6 @@ const TaskCatalog = ({ embedded = false }) => {
     setSelectedTag("all");
     setSelectedLevel("all");
   };
-
-  const buildSubmissionMeta = (file) => ({
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type || "Unknown type",
-    lastModified: file.lastModified || Date.now(),
-  });
 
   const formatFileSize = (size = 0) => {
     if (!size) return "Unknown size";
@@ -318,13 +303,20 @@ const TaskCatalog = ({ embedded = false }) => {
       minute: "2-digit",
     });
 
-  const handleSelectAndSubmitTaskFile = (task, file) => {
-    if (!file) return;
-    const submission = buildSubmissionMeta(file);
-    submitAssignmentMutation.mutate({
-      task,
-      submission,
-    });
+  const renderTaskDocument = (task) => {
+    if (!task.pdf_url) {
+      return <p className="text-xs text-slate-400">No task PDF</p>;
+    }
+
+    return (
+      <a
+        href={task.pdf_url}
+        download={task.pdf_name || "assignment.pdf"}
+        className="inline-flex items-center rounded-md bg-[#eaf8ff] px-2 py-1 text-xs font-semibold text-[#0f84bb] transition hover:bg-[#d9f1ff]"
+      >
+        {task.pdf_name || "Download PDF"}
+      </a>
+    );
   };
 
   const renderAssignmentRows = (tasks, section) =>
@@ -335,7 +327,15 @@ const TaskCatalog = ({ embedded = false }) => {
       return (
         <tr key={task.id} className="border-t border-slate-200 text-sm text-slate-700">
           <td className="px-3 py-3 text-slate-500">{selectedCourse?.courseCode}</td>
-          <td className="px-3 py-3 font-semibold text-[#1f5f9a]">{task.title}</td>
+          <td className="px-3 py-3">
+            <div className="space-y-2">
+              <p className="font-semibold text-[#1f5f9a]">{task.title}</p>
+              <p className="text-xs leading-5 text-slate-500">
+                {String(task.description || "").trim() || "No description"}
+              </p>
+              {renderTaskDocument(task)}
+            </div>
+          </td>
           <td className="px-3 py-3">
             <div className="space-y-1 text-xs">
               <p>
@@ -344,26 +344,39 @@ const TaskCatalog = ({ embedded = false }) => {
               <p className={isSubmitted ? "text-[#1f5f9a]" : "text-slate-500"}>
                 {isSubmitted ? "Download submissions" : "Not submitted"}
               </p>
-            </div>
-          </td>
-          <td className="px-3 py-3">
-            <div className="space-y-1 text-xs">
-              <p>Due: {task.deadline ? formatLongDate(task.deadline) : "No feedback deadline"}</p>
               <p className="text-slate-500">
                 {submission ? new Date(submission.uploadedAt).toLocaleTimeString() : "@ 00:40"}
               </p>
+              {submission && (
+                <p className="text-[#1f5f9a]">
+                  {submission.fileName} ({formatFileSize(submission.fileSize)})
+                </p>
+              )}
             </div>
           </td>
           <td className="px-3 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="cursor-pointer rounded-sm bg-lime-500 px-5 py-2 text-xs font-bold text-slate-900 shadow-sm hover:bg-lime-400">
-                {section === "open" ? "Submit" : "Re-Submit"}
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(event) => handleSelectAndSubmitTaskFile(task, event.target.files?.[0] || null)}
-                />
-              </label>
+              <TasksModel type="update" data={task}>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <FiEdit2 />
+                  Edit
+                </button>
+              </TasksModel>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Delete this assignment?")) {
+                    deleteTaskMutation.mutate(task.id);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+              >
+                <FiTrash2 />
+                Remove
+              </button>
             </div>
           </td>
         </tr>
@@ -389,53 +402,55 @@ const TaskCatalog = ({ embedded = false }) => {
 
         <div>
           <section className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <label className="relative min-w-[240px] flex-1">
-                <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search Courses & Category"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  className="w-full rounded-lg border border-[#8dd2f0] bg-white py-2 pl-9 pr-3 text-xs outline-none ring-0 placeholder:text-slate-400 focus:border-[#30a8dd]"
-                />
-              </label>
+            {!selectedCourse && (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <label className="relative min-w-[240px] flex-1">
+                  <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search Courses & Category"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    className="w-full rounded-lg border border-[#8dd2f0] bg-white py-2 pl-9 pr-3 text-xs outline-none ring-0 placeholder:text-slate-400 focus:border-[#30a8dd]"
+                  />
+                </label>
 
-              <select
-                value={selectedTag}
-                onChange={(event) => setSelectedTag(event.target.value)}
-                className="h-[34px] min-w-[130px] rounded-lg border border-[#8dd2f0] bg-white px-3 text-xs text-slate-600 outline-none"
-              >
-                <option value="all">All Tags</option>
-                {tagOptions
-                  .filter((tag) => tag !== "all")
-                  .map((tag) => (
-                    <option key={tag} value={tag}>
-                      {tag}
-                    </option>
-                  ))}
-              </select>
+                <select
+                  value={selectedTag}
+                  onChange={(event) => setSelectedTag(event.target.value)}
+                  className="h-[34px] min-w-[130px] rounded-lg border border-[#8dd2f0] bg-white px-3 text-xs text-slate-600 outline-none"
+                >
+                  <option value="all">All Tags</option>
+                  {tagOptions
+                    .filter((tag) => tag !== "all")
+                    .map((tag) => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                </select>
 
-              <select
-                value={selectedLevel}
-                onChange={(event) => setSelectedLevel(event.target.value)}
-                className="h-[34px] min-w-[130px] rounded-lg border border-[#8dd2f0] bg-white px-3 text-xs text-slate-600 outline-none"
-              >
-                <option value="all">All Levels</option>
-                <option value="Beginner">Beginner</option>
-                <option value="Intermediate">Intermediate</option>
-              </select>
+                <select
+                  value={selectedLevel}
+                  onChange={(event) => setSelectedLevel(event.target.value)}
+                  className="h-[34px] min-w-[130px] rounded-lg border border-[#8dd2f0] bg-white px-3 text-xs text-slate-600 outline-none"
+                >
+                  <option value="all">All Levels</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                </select>
 
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#8dd2f0] bg-white text-[#1da8e2]"
-                aria-label="Clear filters"
-                title="Clear filters"
-              >
-                <FiFilter />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#8dd2f0] bg-white text-[#1da8e2]"
+                  aria-label="Clear filters"
+                  title="Clear filters"
+                >
+                  <FiFilter />
+                </button>
+              </div>
+            )}
 
             {!selectedCourse && (
               <p className="mb-3 text-xs text-slate-500">
@@ -518,19 +533,46 @@ const TaskCatalog = ({ embedded = false }) => {
                         Linked by `project_id` = {selectedCourse.courseCode} ({selectedCourseTasks.length} tasks)
                       </p>
                     </div>
-                    <TasksModel
-                      initialData={{
-                        project_id: selectedCourse.courseCode,
-                        title: `${selectedCourse.title} Task`,
-                        priority: "medium",
-                        status: "in-progress",
-                        deadline: new Date().toISOString().slice(0, 10),
-                      }}
-                    >
-                      <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
-                        Add Task
+                    <div className="flex flex-wrap items-center gap-2">
+                      <TasksModel
+                        initialData={{
+                          project_id: selectedCourse.courseCode,
+                          title: `${selectedCourse.title} Task`,
+                          priority: "medium",
+                          status: "in-progress",
+                          deadline: new Date().toISOString().slice(0, 10),
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                        >
+                          Add Task
+                        </button>
+                      </TasksModel>
+                      <button
+                        type="button"
+                        onClick={() => setAssignmentView("open")}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                          assignmentView === "open"
+                            ? "bg-blue-600 text-white"
+                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        Open Assignments
                       </button>
-                    </TasksModel>
+                      <button
+                        type="button"
+                        onClick={() => setAssignmentView("submitted")}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                          assignmentView === "submitted"
+                            ? "bg-blue-600 text-white"
+                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        Submitted Assignments
+                      </button>
+                    </div>
                   </div>
 
                   {isTasksLoading && <p className="text-sm text-slate-500">Loading tasks...</p>}
@@ -538,13 +580,14 @@ const TaskCatalog = ({ embedded = false }) => {
 
                   {!isTasksLoading && !isTasksError && selectedCourseTasks.length === 0 && (
                     <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
-                      No tasks for this course yet. Click <strong>Add Task</strong> to create one.
+                      No tasks for this course yet.
                     </div>
                   )}
 
                   {!isTasksLoading && !isTasksError && selectedCourseTasks.length > 0 && (
-                    <div className="space-y-8">
-                      <section>
+                    <div>
+                      {assignmentView === "open" ? (
+                        <section>
                         <h4 className="mb-3 text-3xl font-bold tracking-tight text-slate-700">Open Assignments</h4>
                         <div className="overflow-x-auto border border-slate-200 bg-white">
                           <table className="min-w-full text-left text-sm">
@@ -552,9 +595,8 @@ const TaskCatalog = ({ embedded = false }) => {
                               <tr className="border-b border-slate-200">
                                 <th className="px-3 py-2 font-semibold">Module</th>
                                 <th className="px-3 py-2 font-semibold">Assignment</th>
-                                <th className="px-3 py-2 font-semibold">Submissions</th>
-                                <th className="px-3 py-2 font-semibold">Feedback</th>
-                                <th className="px-3 py-2 font-semibold">State</th>
+                                <th className="px-3 py-2 font-semibold">DeadLine</th>
+                                <th className="px-3 py-2 font-semibold">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -562,7 +604,7 @@ const TaskCatalog = ({ embedded = false }) => {
                                 renderAssignmentRows(openAssignments, "open")
                               ) : (
                                 <tr className="border-t border-slate-200 text-sm text-slate-500">
-                                  <td colSpan="5" className="px-3 py-4">
+                                  <td colSpan="4" className="px-3 py-4">
                                     No open assignments.
                                   </td>
                                 </tr>
@@ -570,9 +612,9 @@ const TaskCatalog = ({ embedded = false }) => {
                             </tbody>
                           </table>
                         </div>
-                      </section>
-
-                      <section>
+                        </section>
+                      ) : (
+                        <section>
                         <h4 className="mb-3 text-3xl font-bold tracking-tight text-slate-700">Submitted Assignments</h4>
                         <div className="overflow-x-auto border border-slate-200 bg-white">
                           <table className="min-w-full text-left text-sm">
@@ -580,9 +622,8 @@ const TaskCatalog = ({ embedded = false }) => {
                               <tr className="border-b border-slate-200">
                                 <th className="px-3 py-2 font-semibold">Module</th>
                                 <th className="px-3 py-2 font-semibold">Assignment</th>
-                                <th className="px-3 py-2 font-semibold">Submissions</th>
-                                <th className="px-3 py-2 font-semibold">Feedback</th>
-                                <th className="px-3 py-2 font-semibold">State</th>
+                                <th className="px-3 py-2 font-semibold">DeadLine</th>
+                                <th className="px-3 py-2 font-semibold">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -590,7 +631,7 @@ const TaskCatalog = ({ embedded = false }) => {
                                 renderAssignmentRows(submittedAssignments, "submitted")
                               ) : (
                                 <tr className="border-t border-slate-200 text-sm text-slate-500">
-                                  <td colSpan="5" className="px-3 py-4">
+                                  <td colSpan="4" className="px-3 py-4">
                                     No submitted assignments yet.
                                   </td>
                                 </tr>
@@ -598,7 +639,8 @@ const TaskCatalog = ({ embedded = false }) => {
                             </tbody>
                           </table>
                         </div>
-                      </section>
+                        </section>
+                      )}
                     </div>
                   )}
 
