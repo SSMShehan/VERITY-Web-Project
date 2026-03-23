@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { FiArrowLeft, FiBookOpen, FiClock, FiEdit2, FiFilter, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
+import { FiArrowLeft, FiEdit2, FiFilter, FiSearch, FiTrash2, FiUser } from "react-icons/fi";
 import { backendUrl } from "../../App";
 import TasksModel from "./TasksModel";
 import { queryClient } from "./queryClient";
@@ -320,23 +320,34 @@ const TaskCatalog = ({ embedded = false }) => {
   };
 
   const renderAssignmentRows = (tasks, section) =>
-    tasks.map((task) => {
+    tasks.map((task, index) => {
       const submission = uploadedByTask[task.id];
       const isSubmitted = Boolean(submission) || String(task.status || "").trim().toLowerCase() === "completed";
+      const assignmentLabel = `${section === "submitted" ? "Submitted" : "Assignment"} ${index + 1}`;
 
       return (
-        <tr key={task.id} className="border-t border-slate-200 text-sm text-slate-700">
-          <td className="px-3 py-3 text-slate-500">{selectedCourse?.courseCode}</td>
-          <td className="px-3 py-3">
-            <div className="space-y-2">
+        <tr key={task.id} className="border-t-2 border-slate-300 text-sm text-slate-700">
+          <td className="w-[14%] px-4 py-3 align-top text-slate-500">{selectedCourse?.courseCode}</td>
+          <td className="w-[56%] px-4 py-3 align-top">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  {assignmentLabel}
+                </span>
+                {isSubmitted && (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-700">
+                    Submitted
+                  </span>
+                )}
+              </div>
               <p className="font-semibold text-[#1f5f9a]">{task.title}</p>
-              <p className="text-xs leading-5 text-slate-500">
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-500">
                 {String(task.description || "").trim() || "No description"}
               </p>
               {renderTaskDocument(task)}
             </div>
           </td>
-          <td className="px-3 py-3">
+          <td className="w-[20%] px-4 py-3 align-top">
             <div className="space-y-1 text-xs">
               <p>
                 Due: {task.deadline ? formatLongDate(task.deadline) : "No deadline"}
@@ -354,7 +365,7 @@ const TaskCatalog = ({ embedded = false }) => {
               )}
             </div>
           </td>
-          <td className="px-3 py-3">
+          <td className="w-[10%] px-4 py-3 align-top">
             <div className="flex flex-wrap items-center gap-2">
               <TasksModel type="update" data={task}>
                 <button
@@ -485,23 +496,11 @@ const TaskCatalog = ({ embedded = false }) => {
                   <h2 className="text-2xl font-extrabold tracking-tight text-slate-800">{selectedCourse.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{selectedCourse.description}</p>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-1">
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <p className="mb-1 text-xs text-slate-500">Instructor</p>
                       <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <FiUser /> {selectedCourse.instructor}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <p className="mb-1 text-xs text-slate-500">Duration</p>
-                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                        <FiClock /> {selectedCourse.duration}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <p className="mb-1 text-xs text-slate-500">Lessons</p>
-                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                        <FiBookOpen /> {selectedCourse.lessons} lessons
                       </p>
                     </div>
                   </div>
@@ -593,10 +592,10 @@ const TaskCatalog = ({ embedded = false }) => {
                           <table className="min-w-full text-left text-sm">
                             <thead className="bg-white text-[#1f5f9a]">
                               <tr className="border-b border-slate-200">
-                                <th className="px-3 py-2 font-semibold">Module</th>
-                                <th className="px-3 py-2 font-semibold">Assignment</th>
-                                <th className="px-3 py-2 font-semibold">DeadLine</th>
-                                <th className="px-3 py-2 font-semibold">Actions</th>
+                                <th className="w-[14%] px-4 py-3 font-semibold">Module</th>
+                                <th className="w-[56%] px-4 py-3 font-semibold">Assignment</th>
+                                <th className="w-[20%] px-4 py-3 font-semibold">DeadLine</th>
+                                <th className="w-[10%] px-4 py-3 font-semibold">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -620,10 +619,10 @@ const TaskCatalog = ({ embedded = false }) => {
                           <table className="min-w-full text-left text-sm">
                             <thead className="bg-white text-[#1f5f9a]">
                               <tr className="border-b border-slate-200">
-                                <th className="px-3 py-2 font-semibold">Module</th>
-                                <th className="px-3 py-2 font-semibold">Assignment</th>
-                                <th className="px-3 py-2 font-semibold">DeadLine</th>
-                                <th className="px-3 py-2 font-semibold">Actions</th>
+                                <th className="w-[14%] px-4 py-3 font-semibold">Module</th>
+                                <th className="w-[56%] px-4 py-3 font-semibold">Assignment</th>
+                                <th className="w-[20%] px-4 py-3 font-semibold">DeadLine</th>
+                                <th className="w-[10%] px-4 py-3 font-semibold">Actions</th>
                               </tr>
                             </thead>
                             <tbody>

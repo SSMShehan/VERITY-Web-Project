@@ -15,9 +15,8 @@ const emptyTask = {
 const fields = [
   { label: "Project ID", name: "project_id" },
   { label: "Title", name: "title" },
-  { label: "Description", name: "description" },
+  { label: "Description", name: "description", type: "textarea" },
   { label: "Priority", name: "priority" },
-  { label: "Status", name: "status" },
   { label: "Deadline", name: "deadline", type: "date" },
 ];
 
@@ -194,13 +193,23 @@ const TasksModel = ({ children, type = "add", data = null, initialData = null })
               {fields.map((field) => (
                 <div key={field.name}>
                   <label className="block text-sm text-gray-600 mb-1">{field.label}</label>
-                  <input
-                    type={field.type || "text"}
-                    name={field.name}
-                    value={info[field.name] || ""}
-                    onChange={handleChanges}
-                    className="w-full px-4 py-2 rounded-xl bg-gray-100 shadow-inner outline-none focus:ring-blue-400"
-                  />
+                  {field.type === "textarea" ? (
+                    <textarea
+                      name={field.name}
+                      value={info[field.name] || ""}
+                      onChange={handleChanges}
+                      rows={4}
+                      className="w-full resize-none rounded-xl bg-gray-100 px-4 py-3 shadow-inner outline-none focus:ring-blue-400"
+                    />
+                  ) : (
+                    <input
+                      type={field.type || "text"}
+                      name={field.name}
+                      value={info[field.name] || ""}
+                      onChange={handleChanges}
+                      className="w-full px-4 py-2 rounded-xl bg-gray-100 shadow-inner outline-none focus:ring-blue-400"
+                    />
+                  )}
                 </div>
               ))}
 
