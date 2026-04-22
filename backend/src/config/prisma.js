@@ -1,4 +1,7 @@
 const { Pool } = require("pg");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 const pool = new Pool({
   user: "postgres",
@@ -12,4 +15,6 @@ const query = (text, params) => {
   return pool.query(text, params);
 };
 
-module.exports = { query };
+// Export prisma client as the main export, and query as a property
+module.exports = prisma;
+module.exports.query = query;
